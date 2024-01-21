@@ -11,3 +11,6 @@ tracing-subscriber = { version = "0.3", features = [] }
 tokio = { version = "1.35.1", features = ["full"] }
 futures = "0.3.30"
 chrono = "0.4.31"
+serde_json = "1.0.111"
+serde = { version = "1.0.195", features = ["derive"] }
+colored_json = "4.1.0"
