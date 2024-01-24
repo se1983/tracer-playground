@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::thread::sleep;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -14,7 +15,7 @@ use tokio::sync::mpsc::Sender;
 use colored_json::prelude::*;
 
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::registry::SpanRef;
+use tracing::field::Field;
 
 async fn tcp_serv_listen(listener: TcpListener) {
     println!("Listening");
@@ -52,19 +53,53 @@ struct TracingMessage {
     module_path: String,
     message: String,
     timestamp: i64,
+    span: String,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+struct CustomVisitor {
+    message: String,
+}
+
+
+impl CustomVisitor {
+    fn new() -> Self {
+        CustomVisitor{ message: "".to_string()  }
+    }
+}
+
+impl tracing::field::Visit for CustomVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.to_string() == "message" {
+            self.message =format!("{value:?}");
+        }
+    }
+}
+
+impl std::fmt::Display for CustomVisitor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(&self).unwrap_or_default())
+    }
+}
+
+
+
 impl TracingMessage {
-    fn new(event: &tracing::Event<'_>, span_name: String) -> Self {
+    fn new(event: &tracing::Event<'_>, span_name: &str) -> Self {
         let metadata = event.metadata();
-        let fields = event.fields();
+        let _fields = event.fields();
+
+
+        let mut visitor = CustomVisitor::new();
+        event.record(&mut visitor);
 
         TracingMessage {
             name: metadata.name().to_string(),
             level: metadata.level().to_string(),
             module_path: metadata.module_path().unwrap().to_string(),
-            message: fields.map(|m| m.to_string()).collect(),
+            message: visitor.message,
             timestamp: Utc::now().timestamp_millis(),
+            span: span_name.to_string(),
         }
     }
 }
@@ -96,8 +131,10 @@ where
         ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
 
+        let span = ctx.event_span(event).unwrap();
+
         futures::executor::block_on(async move {
-            if let Err(_) = self.tx.clone().send(TracingMessage::new(event, "hi".to_string())).await {
+            if let Err(_) = self.tx.clone().send(TracingMessage::new(event, span.name())).await {
                 println!("receiver dropped");
             };
         });
