@@ -133,18 +133,23 @@ where
 
         let span = ctx.event_span(event).unwrap();
 
-        futures::executor::block_on(async move {
-            if (self.tx.clone().send(TracingMessage::new(event, span.name())).await).is_err() {
+        let message = TracingMessage::new(event, span.name());
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            if (tx.send(message).await).is_err() {
                 println!("receiver dropped");
             };
+
+            tx.closed().await
         });
+
     }
 }
 
 #[instrument(name = "pheidippides")]
 async fn run_forever() {
     loop {
-        sleep(Duration::from_millis(2000));
+        sleep(Duration::from_millis(20));
         println!("Sending logmessage {}", Utc::now().timestamp_millis());
         info!("Joy, we win!");
     }
@@ -156,7 +161,7 @@ async fn main() {
         tcp_serv_listen(TcpListener::bind("127.0.0.1:5555").await.unwrap()).await
     });
 
-    let (tx, mut rx) = mpsc::channel(10);
+    let (tx, mut rx) = mpsc::channel(100000);
 
     let fmt = format().with_timer(time::Uptime::default());
     let fmt_layer = fmt::layer().event_format(fmt).with_target(false);
