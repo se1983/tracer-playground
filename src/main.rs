@@ -134,7 +134,7 @@ where
         let span = ctx.event_span(event).unwrap();
 
         futures::executor::block_on(async move {
-            if let Err(_) = self.tx.clone().send(TracingMessage::new(event, span.name())).await {
+            if (self.tx.clone().send(TracingMessage::new(event, span.name())).await).is_err() {
                 println!("receiver dropped");
             };
         });
