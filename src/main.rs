@@ -161,9 +161,9 @@ async fn main() {
         tcp_serv_listen(TcpListener::bind("127.0.0.1:5555").await.unwrap()).await
     });
 
-    let (tx, mut rx) = mpsc::channel(100000);
+    let (tx, mut rx) = mpsc::channel(63);
 
-    let fmt = format().with_timer(time::Uptime::default());
+    let fmt = format().with_timer(time::SystemTime::default());
     let fmt_layer = fmt::layer().event_format(fmt).with_target(false);
 
     tracing_subscriber::registry()
